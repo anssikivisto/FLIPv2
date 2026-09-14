@@ -278,6 +278,8 @@ function tRecognize(m,pool){ const qs=shuffle(pool).slice(0,Math.min(10,pool.len
     function adv(){ ov.remove(); if(idx+1>=qs.length)finishRound(); else {idx++;draw();} }
     ov.onclick=adv; ov.querySelector("#ovnext").onclick=(e)=>{e.stopPropagation();adv();};
     document.body.appendChild(ov);
+    // Luetaan sana vasta, kun ääniefekti on soitettu loppuun (~550 ms viive)
+    setTimeout(()=>speak(t.en),550);
   } draw();
 }
 
@@ -316,8 +318,8 @@ function tMatch(m,pool){ const BATCH=4; let all=shuffle(pool),batches=[]; for(le
   function highlightDrop(x,y){ clearHi(); const el=document.elementFromPoint(x,y); const drop=el&&el.closest("[data-drop]"); if(drop&&!matched[drop.getAttribute("data-drop")]){ drop.style.transform="scale(1.05)"; drop.style.borderColor=S.topic.theme.accent; drop.style.background=S.topic.theme.bg; } }
   function clearHi(){ document.querySelectorAll(".mimg").forEach(d=>{ const en=d.getAttribute("data-drop"); if(!matched[en]){ d.style.transform="none"; d.style.borderColor=S.topic.theme.border; d.style.background="#fff"; } }); }
   function tryMatch(wordEn,imgEn){ if(matched[imgEn])return;
-    if(wordEn===imgEn){ matched[imgEn]=true; selected=null; speak(imgEn); playCorrect(); playStar(); onStar(); drawWords(); drawImages();
-      if(batches[bi].every(it=>matched[it.en])){ setTimeout(()=>{ if(bi+1>=batches.length)finishRound(); else {bi++;draw();} },1000); } }
+    if(wordEn===imgEn){ matched[imgEn]=true; selected=null; playCorrect(); playStar(); onStar(); setTimeout(()=>speak(imgEn),550); drawWords(); drawImages();
+      if(batches[bi].every(it=>matched[it.en])){ setTimeout(()=>{ if(bi+1>=batches.length)finishRound(); else {bi++;draw();} },1300); } }
     else { const d=document.querySelector('[data-drop="'+CSS.escape(imgEn)+'"]'); if(d){ d.classList.add("shake"); playTry(); setTimeout(()=>d.classList.remove("shake"),450);} }
   } draw();
 }
@@ -362,7 +364,7 @@ function tWrite(m,pool){ const words=shuffle(pool).slice(0,Math.min(10,pool.leng
     const inp=document.getElementById("win"); const tiles=document.getElementById("tiles");
     function drawTiles(typed){ let ok=true; tiles.innerHTML=target.split("").map((ch,i)=>{ if(ch===" ")return '<span style="width:12px"></span>'; const t=typed[i]; const match=t&&t.toLowerCase()===ch.toLowerCase()&&ok; if(t&&t.toLowerCase()!==ch.toLowerCase())ok=false; return '<span class="tile" style="'+(match?"border-color:#15803D;background:#DCFCE7;color:#15803D":"")+'">'+(t?esc(t):"")+'</span>'; }).join(""); }
     drawTiles("");
-    inp.oninput=()=>{ if(done)return; const v=inp.value; drawTiles(v); if(v.toLowerCase()===target.toLowerCase()){ done=true; inp.style.borderColor="#15803D"; inp.style.color="#15803D"; speak(target); playCorrect(); playStar(); if(!starred){starred=true;onStar();} document.getElementById("wok").style.display="block"; const c=document.getElementById("wctrl"); if(!document.getElementById("wnext")) c.insertAdjacentHTML("beforeend",nextArrow("wnext",idx+1>=words.length?"Valmis":"Seuraava")); document.getElementById("wnext").onclick=()=>{ if(idx+1>=words.length)finishRound(); else {idx++;draw();} }; } };
+    inp.oninput=()=>{ if(done)return; const v=inp.value; drawTiles(v); if(v.toLowerCase()===target.toLowerCase()){ done=true; inp.style.borderColor="#15803D"; inp.style.color="#15803D"; playCorrect(); playStar(); if(!starred){starred=true;onStar();} setTimeout(()=>speak(target),550); document.getElementById("wok").style.display="block"; const c=document.getElementById("wctrl"); if(!document.getElementById("wnext")) c.insertAdjacentHTML("beforeend",nextArrow("wnext",idx+1>=words.length?"Valmis":"Seuraava")); document.getElementById("wnext").onclick=()=>{ if(idx+1>=words.length)finishRound(); else {idx++;draw();} }; } };
     document.getElementById("vihje").onclick=()=>{ speak(target); hintCount++; if(hintCount>=2){ const h=document.getElementById("hint"); h.style.display="block"; setTimeout(()=>h.style.display="none",2200); } };
     setTimeout(()=>inp.focus(),250);
   } draw();
