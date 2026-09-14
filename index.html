@@ -148,7 +148,7 @@ function handleBack(){ if(S.screen==="game"||S.screen==="complete") go("tasks");
 function render(){
   const canBack=S.screen!=="menu";
   const accent=S.screen==="stickers"?"#D97706":(S.topic?S.topic.theme.accent:"#0369A1");
-  let title="English Trainer";
+  let title="FLIP English!";
   if(S.screen==="stickers")title="Tarrat 🏅";
   else if(S.screen==="game"||S.screen==="complete")title=S.topic.title+" · "+TASK_LABEL[S.task];
   else if(S.topic&&S.screen!=="menu")title=S.topic.title;
