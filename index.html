@@ -35,6 +35,15 @@
   @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
   @keyframes draghint{0%,100%{transform:translateX(0) rotate(0)}50%{transform:translateX(48px) rotate(10deg)}}
   .draghint{display:inline-block;animation:draghint 1.3s ease-in-out infinite}
+  @keyframes stickerToast {
+    0% { transform: scale(0) translateY(0); opacity:0; }
+    20% { transform: scale(1.3) translateY(12px); opacity:1; }
+    40% { transform: scale(1) translateY(12px) rotate(-8deg); }
+    60% { transform: scale(1) translateY(12px) rotate(8deg); }
+    80% { transform: scale(1) translateY(12px) rotate(0deg); opacity:1; }
+    100% { transform: scale(0) translateY(0); opacity:0; }
+  }
+  .stickertoast { animation: stickerToast 1.8s cubic-bezier(.34,1.56,.64,1) forwards; }
   .overlay { position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.3); padding:20px; }
   input[type=range]{ accent-color:#38BDF8; height:12px; }
   .txtin { border:4px solid; border-radius:16px; padding:14px 20px; font-family:'Fredoka',sans-serif; font-weight:700;
@@ -107,8 +116,41 @@ function saveProg(){ localStorage.setItem(PKEY,JSON.stringify(prog)); }
 function addStars(n){ prog.stars+=n; saveProg(); syncStickers(); }
 function completeRound(topicId,task){ const today=new Date().toISOString().slice(0,10); if(prog.lastPlayDay!==today){ const y=new Date(Date.now()-864e5).toISOString().slice(0,10); prog.streak=prog.lastPlayDay===y?prog.streak+1:1; prog.lastPlayDay=today; } const key=topicId+":"+task; prog.completed[key]=(prog.completed[key]||0)+1; saveProg(); syncStickers(); }
 function resetProgress(){ prog={stars:0,streak:0,lastPlayDay:null,completed:{},unlocked:[]}; saveProg(); }
+
 let celebrateQueue=[];
-function syncStickers(){ const earned=earnedStickerIds(); const cur=prog.unlocked||[]; const fresh=earned.filter(id=>!cur.includes(id)); if(fresh.length){ prog.unlocked=[...new Set([...cur,...earned])]; saveProg(); celebrateQueue.push(...fresh); playStar(); showCelebration(); } }
+let justUnlockedIds=[];
+
+function syncStickers(){ 
+  const earned=earnedStickerIds(); 
+  const cur=prog.unlocked||[]; 
+  const fresh=earned.filter(id=>!cur.includes(id)); 
+  if(fresh.length){ 
+    prog.unlocked=[...new Set([...cur,...earned])]; 
+    saveProg(); 
+    celebrateQueue.push(...fresh); 
+    justUnlockedIds.push(...fresh);
+    playStar(); 
+    showMiniStickerToast(fresh[0]);
+  } 
+}
+
+function showMiniStickerToast(stickerId){
+  const s = stickerById(stickerId);
+  if(!s) return;
+  const old = document.getElementById("mini-toast");
+  if(old) old.remove();
+  
+  const starEl = document.getElementById("starcount");
+  const rect = starEl ? starEl.getBoundingClientRect() : { left: window.innerWidth/2, top: 20 };
+  
+  const toast = document.createElement("div");
+  toast.id = "mini-toast";
+  toast.className = "stickertoast";
+  toast.style.cssText = "position:fixed; z-index:99; left:"+(rect.left - 10)+"px; top:"+(rect.top + 28)+"px; font-size:46px; pointer-events:none; filter:drop-shadow(0 8px 16px rgba(0,0,0,0.25));";
+  toast.innerHTML = s.emoji;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 1800);
+}
 
 /* ============================ AUDIO ============================ */
 let _voices=[];
@@ -278,6 +320,10 @@ function renderComplete(m){ const t=S.topic; const stars=Math.min(3,Math.max(1,M
       nextArrow("again","Pelaa lisää")+'</div></div>';
   document.getElementById("tomenu").onclick=()=>go("tasks");
   document.getElementById("again").onclick=()=>{ S.roundStars=0; go("game"); };
+  
+  if(celebrateQueue.length > 0) {
+    setTimeout(showCelebration, 400);
+  }
 }
 
 /* ============================ GAME DISPATCH ============================ */
@@ -448,17 +494,23 @@ function tWrite(m,pool){ const words=shuffle(pool).slice(0,Math.min(10,pool.leng
 }
 
 /* ============================ STICKERS ============================ */
-function renderStickers(m){ const unlocked=prog.unlocked||[]; const total=STAR_STICKERS.length+MASTERY_STICKERS.length;
-  function cell(s,ok,hint){ return '<button class="scell" data-id="'+s.id+'" style="cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px;border-radius:16px;border:4px solid '+(ok?"#FBBF24":"#E2E8F0")+';background:'+(ok?"#fff":"#F8FAFC")+';aspect-ratio:1">'+
+function renderStickers(m){ 
+  const unlocked=prog.unlocked||[]; 
+  const total=STAR_STICKERS.length+MASTERY_STICKERS.length;
+  function cell(s,ok,hint){ 
+    const isNew = justUnlockedIds.includes(s.id);
+    return '<button class="scell '+(isNew?'wiggle':'')+'" data-id="'+s.id+'" style="cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px;border-radius:16px;border:4px solid '+(ok?(isNew?"#F59E0B":"#FBBF24"):"#E2E8F0")+';background:'+(ok?"#fff":"#F8FAFC")+';aspect-ratio:1">'+
     '<span style="font-size:44px;filter:'+(ok?"none":"grayscale(1)")+';opacity:'+(ok?1:.35)+'">'+s.emoji+'</span>'+
     '<span class="fred" style="font-weight:700;font-size:13px;text-align:center;color:'+(ok?"#334155":"#94A3B8")+'">'+s.name+'</span>'+
-    '<span style="font-size:11px;font-weight:700;color:'+(ok?"#D97706":"#94A3B8")+'">'+(ok?'':'🔒 ')+hint+'</span></button>'; }
+    '<span style="font-size:11px;font-weight:700;color:'+(ok?"#D97706":"#94A3B8")+'">'+(ok?(isNew?'✨ UUSI!':''):'🔒 ')+hint+'</span></button>'; 
+  }
   m.innerHTML='<div class="fade" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:24px">'+
     '<div style="text-align:center"><h2 class="fred" style="font-weight:700;font-size:36px;color:#F59E0B;margin:0">Tarrat 🏅</h2><p style="color:#64748B;font-weight:700;font-size:18px;margin:4px 0">Kerätty '+unlocked.length+' / '+total+' · sinulla on '+prog.stars+' tähteä ⭐</p></div>'+
     '<div style="width:100%;max-width:760px"><h3 class="fred" style="font-weight:700;font-size:20px;color:#64748B;margin:0 0 12px">Ansaitse tähdillä ⭐</h3><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px">'+STAR_STICKERS.map(s=>cell(s,unlocked.includes(s.id),s.cost+" ⭐")).join("")+'</div></div>'+
     '<div style="width:100%;max-width:760px"><h3 class="fred" style="font-weight:700;font-size:20px;color:#64748B;margin:0 0 12px">Aihemestarit 🎯</h3><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px">'+MASTERY_STICKERS.map(s=>cell(s,unlocked.includes(s.id),topicRounds(s.topic)+"/"+MASTERY_TIMES+" "+s.topicFi)).join("")+'</div></div></div>';
   m.querySelectorAll(".scell").forEach(b=>b.onclick=()=>showStickerDetail(b.dataset.id));
 }
+
 function showStickerDetail(id){ const s=stickerById(id); const ok=(prog.unlocked||[]).includes(id);
   const hint = s.cost?(s.cost+" ⭐"):(topicRounds(s.topic)+"/"+MASTERY_TIMES+" "+s.topicFi);
   const ov=document.createElement("div"); ov.className="overlay";
@@ -471,15 +523,33 @@ function showStickerDetail(id){ const s=stickerById(id); const ok=(prog.unlocked
   ov.querySelector("div").onclick=(e)=>e.stopPropagation();
   document.body.appendChild(ov);
 }
-function showCelebration(){ if(!celebrateQueue.length||document.getElementById("celeb"))return; const s=stickerById(celebrateQueue[0]);
+
+function showCelebration(){ 
+  if(!celebrateQueue.length||document.getElementById("celeb"))return; 
+  const s=stickerById(celebrateQueue[0]);
   const ov=document.createElement("div"); ov.className="overlay"; ov.id="celeb";
-  ov.innerHTML='<div class="pop" style="background:#fff;border:4px solid #FBBF24;border-radius:24px;padding:32px;display:flex;flex-direction:column;align-items:center;gap:12px;max-width:300px;text-align:center">'+
+  ov.innerHTML='<div class="pop" style="background:#fff;border:4px solid #FBBF24;border-radius:24px;padding:32px;display:flex;flex-direction:column;align-items:center;gap:16px;max-width:340px;text-align:center">'+
     '<span class="fred" style="font-weight:700;font-size:18px;color:#F59E0B;letter-spacing:2px">UUSI TARRA!</span>'+
     '<span class="bounce" style="font-size:100px">'+s.emoji+'</span>'+
     '<span class="fred" style="font-weight:700;font-size:28px;color:#334155">'+s.name+'</span>'+
-    '<button id="cok" class="btn fred" style="padding:12px 30px;font-weight:700;font-size:20px;color:#fff;background:#4ADE80;border-color:#15803D">Jee! 🎉</button></div>';
-  function close(){ ov.remove(); celebrateQueue.shift(); if(celebrateQueue.length)setTimeout(showCelebration,150); }
-  ov.onclick=close; ov.querySelector("#cok").onclick=(e)=>{e.stopPropagation();close();};
+    '<div style="display:flex;flex-direction:column;gap:10px;width:100%;margin-top:6px">'+
+      '<button id="cok" class="btn fred" style="padding:12px 20px;font-weight:700;font-size:18px;color:#fff;background:#4ADE80;border-color:#15803D">Jatka 👍</button>'+
+      '<button id="cgo" class="btn fred" style="padding:12px 20px;font-weight:700;font-size:18px;color:#78350F;background:#FBBF24;border-color:#D97706">🏅 Katso kaikki tarrat</button>'+
+    '</div></div>';
+    
+  function close(){ 
+    ov.remove(); 
+    celebrateQueue.shift(); 
+    if(celebrateQueue.length) setTimeout(showCelebration,150); 
+  }
+  
+  ov.querySelector("#cok").onclick=(e)=>{ e.stopPropagation(); close(); };
+  ov.querySelector("#cgo").onclick=(e)=>{ 
+    e.stopPropagation(); 
+    ov.remove(); 
+    celebrateQueue = []; 
+    go("stickers"); 
+  };
   document.body.appendChild(ov);
 }
 
