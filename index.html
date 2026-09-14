@@ -99,7 +99,7 @@ function topicRounds(topicId){ return Object.entries(prog.completed||{}).filter(
 function earnedStickerIds(){ const ids=[]; STAR_STICKERS.forEach(s=>{ if((prog.stars||0)>=s.cost) ids.push(s.id); }); MASTERY_STICKERS.forEach(m=>{ if(topicRounds(m.topic)>=MASTERY_TIMES) ids.push(m.id); }); return ids; }
 
 /* ============================ STORAGE ============================ */
-const PKEY="et_std_progress", VKEY="et_std_voice", HKEY="et_std_matchhint", MKEY="et_std_muted";
+const PKEY="et_std_progress", VKEY="et_std_voice", HKEY="et_std_matchhint";
 let prog = load(PKEY,{stars:0,streak:0,lastPlayDay:null,completed:{},unlocked:[]});
 let voice = load(VKEY,{rate:0.9,accent:"en-GB"});
 function load(k,def){ try{ return {...def,...JSON.parse(localStorage.getItem(k)||"{}")}; }catch(e){ return {...def}; } }
@@ -109,8 +109,6 @@ function completeRound(topicId,task){ const today=new Date().toISOString().slice
 function resetProgress(){ prog={stars:0,streak:0,lastPlayDay:null,completed:{},unlocked:[]}; saveProg(); }
 let celebrateQueue=[];
 function syncStickers(){ const earned=earnedStickerIds(); const cur=prog.unlocked||[]; const fresh=earned.filter(id=>!cur.includes(id)); if(fresh.length){ prog.unlocked=[...new Set([...cur,...earned])]; saveProg(); celebrateQueue.push(...fresh); playStar(); showCelebration(); } }
-function isMuted(){ return localStorage.getItem(MKEY)==="1"; }
-function setMuted(m){ localStorage.setItem(MKEY,m?"1":"0"); }
 
 /* ============================ AUDIO ============================ */
 let _voices=[];
@@ -128,7 +126,7 @@ function slugify(text) {
 }
 
 function speak(text, onEnd) {
-  if (isMuted() || !text) {
+  if (!text) {
     if (onEnd) setTimeout(onEnd, 200);
     return;
   }
@@ -162,11 +160,31 @@ function speak(text, onEnd) {
   audio.play().catch(e => audio.onerror());
 }
 
+async function playRecordedAudio(blobUrl) {
+  if (!blobUrl) return;
+  try {
+    const resp = await fetch(blobUrl);
+    const buf = await resp.arrayBuffer();
+    const c = ac() || new (window.AudioContext || window.webkitAudioContext)();
+    if (c.state === "suspended") await c.resume();
+    const audioBuffer = await c.decodeAudioData(buf);
+    const source = c.createBufferSource();
+    source.buffer = audioBuffer;
+    const gain = c.createGain();
+    gain.gain.value = 2.8; // Vahvistetaan volyymia 280 %
+    source.connect(gain);
+    gain.connect(c.destination);
+    source.start(0);
+  } catch(e) {
+    new Audio(blobUrl).play();
+  }
+}
+
 let _ctx=null;
-function ac(){ if(isMuted())return null; try{ if(!_ctx)_ctx=new (window.AudioContext||window.webkitAudioContext)(); if(_ctx.state==="suspended")_ctx.resume(); return _ctx; }catch(e){ return null; } }
+function ac(){ try{ if(!_ctx)_ctx=new (window.AudioContext||window.webkitAudioContext)(); if(_ctx.state==="suspended")_ctx.resume(); return _ctx; }catch(e){ return null; } }
 function tone(f,st,d,type,g){ const c=ac(); if(!c)return; const o=c.createOscillator(),ga=c.createGain(); o.type=type||"sine"; o.frequency.setValueAtTime(f,c.currentTime+st); ga.gain.setValueAtTime(1e-4,c.currentTime+st); ga.gain.exponentialRampToValueAtTime(g||0.18,c.currentTime+st+.02); ga.gain.exponentialRampToValueAtTime(1e-4,c.currentTime+st+d); o.connect(ga); ga.connect(c.destination); o.start(c.currentTime+st); o.stop(c.currentTime+st+d+.02); }
 function playCorrect(){ tone(523.25,0,.16,"triangle"); tone(659.25,.12,.16,"triangle"); tone(783.99,.24,.28,"triangle"); }
-function playTry(){ tone(392,0,.14,"sine",.14); tone(329.63,.1,.2,"sine",.14); }
+function playTry(){ tone(392,0,.14,"sine",.38); tone(329.63,.1,.2,"sine",.38); }
 function playStar(){ tone(659.25,0,.12,"square",.12); tone(783.99,.1,.12,"square",.12); tone(1046.5,.2,.32,"square",.12); }
 
 /* ============================ HELPERS ============================ */
@@ -190,6 +208,7 @@ function finishRound(){ if(S.task!=="opettele") completeRound(S.topic.id,S.task)
 function handleBack(){ if(S.screen==="game"||S.screen==="complete") go("tasks"); else if(S.screen==="tasks") go(S.topic&&S.topic.levels?"levels":"menu"); else if(S.screen==="levels") go("menu"); else if(S.screen==="stickers") go("menu"); }
 
 function render(){
+  window.scrollTo(0, 0);
   const canBack=S.screen!=="menu";
   const accent=S.screen==="stickers"?"#D97706":(S.topic?S.topic.theme.accent:"#0369A1");
   let title="FLIP English!";
@@ -201,11 +220,9 @@ function render(){
     '<h1 class="fred" style="font-weight:700;font-size:20px;margin:0;color:'+accent+';flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(title)+'</h1>'+
     '<div style="display:flex;align-items:center;gap:8px">'+
       '<div style="display:flex;align-items:center;gap:4px;padding:8px 12px;border-radius:999px;background:#FEF3C7;border:2px solid #FCD34D;font-weight:800;color:#B45309" class="fred"><span>⭐</span><span id="starcount">'+prog.stars+'</span></div>'+
-      '<button id="mute" class="btn" style="padding:9px" title="Ääni">'+(isMuted()?"🔇":"🔊")+'</button>'+
       '<button id="settings" class="btn" style="padding:9px" title="Asetukset">⚙️</button>'+
     '</div></div></header><main id="main"></main>';
   document.getElementById("back").onclick=()=>{ if(canBack)handleBack(); };
-  document.getElementById("mute").onclick=()=>{ setMuted(!isMuted()); render(); };
   document.getElementById("settings").onclick=openSettings;
   const m=document.getElementById("main");
   ({menu:renderMenu,levels:renderLevels,tasks:renderTasks,game:renderGame,complete:renderComplete,stickers:renderStickers}[S.screen])(m);
@@ -305,12 +322,13 @@ function tRecognize(m,pool){ const qs=shuffle(pool).slice(0,Math.min(10,pool.len
   function draw(){ const q=qs[idx]; done=false;
     m.innerHTML='<div class="fade" style="display:flex;flex-direction:column;align-items:center;gap:20px;width:100%">'+
       mascot("Kuuntele sana ja napauta oikeaa kuvaa!",true)+
-      '<button id="listen" class="btn fred bounce" style="display:flex;align-items:center;gap:12px;padding:18px 30px;font-weight:700;font-size:24px;color:#fff;background:'+S.topic.theme.accent+';border-color:#0003">🔊 Kuuntele</button>'+
+      '<button id="listen" class="btn fred" style="display:flex;align-items:center;gap:12px;padding:18px 30px;font-weight:700;font-size:24px;color:#fff;background:'+S.topic.theme.accent+';border-color:#0003">🔊 Kuuntele</button>'+
       '<p class="fred" style="color:#94A3B8;font-weight:700">'+(idx+1)+' / '+qs.length+'</p>'+
       '<div class="grid" id="opts" style="grid-template-columns:1fr 1fr;max-width:520px">'+
         q.opts.map((o,i)=>'<button class="btn opt" data-i="'+i+'" style="height:140px;display:flex;align-items:center;justify-content:center;border-color:'+S.topic.theme.border+'">'+imgHTML(o,S.topic.kind,"64px")+'</button>').join("")+
       '</div></div>';
-    document.getElementById("listen").onclick=()=>speak(q.t.en);
+    const lbtn = document.getElementById("listen");
+    lbtn.onclick=()=>{ lbtn.classList.add("wiggle"); setTimeout(()=>lbtn.classList.remove("wiggle"),400); speak(q.t.en); };
     m.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{ if(done)return; const o=q.opts[+b.dataset.i];
       if(o.en===q.t.en){ done=true; b.style.background="#DCFCE7"; b.style.borderColor="#15803D"; b.classList.add("pop"); playCorrect(); playStar(); onStar(); showRecOverlay(q.t); }
       else { b.classList.add("shake"); playTry(); setTimeout(()=>b.classList.remove("shake"),450); } });
@@ -323,7 +341,6 @@ function tRecognize(m,pool){ const qs=shuffle(pool).slice(0,Math.min(10,pool.len
     function adv(){ ov.remove(); if(idx+1>=qs.length)finishRound(); else {idx++;draw();} }
     ov.onclick=adv; ov.querySelector("#ovnext").onclick=(e)=>{e.stopPropagation();adv();};
     document.body.appendChild(ov);
-    // Luetaan sana vasta, kun ääniefekti on soitettu loppuun (~550 ms viive)
     setTimeout(()=>speak(t.en),550);
   } draw();
 }
@@ -346,7 +363,7 @@ function tMatch(m,pool){ const BATCH=4; let all=shuffle(pool),batches=[]; for(le
   }
   function drawWords(){ const c=document.getElementById("mwords"); c.innerHTML=words.map(w=>'<button class="btn mword" data-en="'+esc(w.en)+'" '+(matched[w.en]?"disabled":"")+' style="padding:16px;font-weight:700;font-size:22px;touch-action:none;border-color:'+S.topic.theme.border+';background:'+(selected===w.en?S.topic.theme.accent:"#fff")+';color:'+(selected===w.en?"#fff":"#1E293B")+';visibility:'+(matched[w.en]?"hidden":"visible")+'">'+esc(w.en)+'</button>').join("");
     c.querySelectorAll(".mword").forEach(b=>{ const w=words.find(x=>x.en===b.dataset.en);
-      b.onpointerdown=(e)=>{ if(matched[w.en])return; if(showHint)dismissHint(); try{b.setPointerCapture(e.pointerId);}catch(_){}
+      b.onpointerdown=(e)=>{ if(matched[w.en])return; if(showHint)dismissHint(); speak(w.en); try{b.setPointerCapture(e.pointerId);}catch(_){}
         drag={w,x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,moved:false,el:b}; };
       b.onpointermove=(e)=>{ if(!drag||drag.w.en!==w.en)return; if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>6)drag.moved=true; drag.x=e.clientX; drag.y=e.clientY; if(drag.moved){ b.style.visibility="hidden"; moveFloat(); highlightDrop(e.clientX,e.clientY);} };
       b.onpointerup=(e)=>{ if(!drag){ return; } const d=drag; drag=null; killFloat(); clearHi();
@@ -363,7 +380,7 @@ function tMatch(m,pool){ const BATCH=4; let all=shuffle(pool),batches=[]; for(le
   function highlightDrop(x,y){ clearHi(); const el=document.elementFromPoint(x,y); const drop=el&&el.closest("[data-drop]"); if(drop&&!matched[drop.getAttribute("data-drop")]){ drop.style.transform="scale(1.05)"; drop.style.borderColor=S.topic.theme.accent; drop.style.background=S.topic.theme.bg; } }
   function clearHi(){ document.querySelectorAll(".mimg").forEach(d=>{ const en=d.getAttribute("data-drop"); if(!matched[en]){ d.style.transform="none"; d.style.borderColor=S.topic.theme.border; d.style.background="#fff"; } }); }
   function tryMatch(wordEn,imgEn){ if(matched[imgEn])return;
-    if(wordEn===imgEn){ matched[imgEn]=true; selected=null; playCorrect(); playStar(); onStar(); setTimeout(()=>speak(imgEn),550); drawWords(); drawImages();
+    if(wordEn===imgEn){ matched[imgEn]=true; selected=null; playCorrect(); playStar(); onStar(); drawWords(); drawImages();
       if(batches[bi].every(it=>matched[it.en])){ setTimeout(()=>{ if(bi+1>=batches.length)finishRound(); else {bi++;draw();} },1300); } }
     else { const d=document.querySelector('[data-drop="'+CSS.escape(imgEn)+'"]'); if(d){ d.classList.add("shake"); playTry(); setTimeout(()=>d.classList.remove("shake"),450);} }
   } draw();
@@ -389,7 +406,7 @@ function tSpeak(m,pool){ const words=shuffle(pool).slice(0,Math.min(10,pool.leng
       (url?'<button id="play" class="btn fred pop" style="display:flex;align-items:center;gap:8px;padding:16px 28px;font-weight:700;font-size:20px;color:#fff;background:#4ADE80;border-color:#15803D">▶️ Kuuntele</button>':'');
     const recb=document.getElementById("rec"); if(recb)recb.onclick=async()=>{ try{ const st=await navigator.mediaDevices.getUserMedia({audio:true}); rec=new MediaRecorder(st); chunks=[]; rec.ondataavailable=e=>e.data.size&&chunks.push(e.data); rec.onstop=()=>{ url=URL.createObjectURL(new Blob(chunks,{type:"audio/webm"})); st.getTracks().forEach(t=>t.stop()); drawCtrl(it); }; rec.start(); recording=true; drawCtrl(it);}catch(e){ document.getElementById("micerr").style.display="block"; } };
     const stopb=document.getElementById("stop"); if(stopb)stopb.onclick=()=>{ if(rec&&recording){ rec.stop(); recording=false; if(!starred[it.en]){starred[it.en]=true;onStar();} } };
-    const playb=document.getElementById("play"); if(playb)playb.onclick=()=>{ if(url)new Audio(url).play(); };
+    const playb=document.getElementById("play"); if(playb)playb.onclick=()=>{ playRecordedAudio(url); };
   } draw();
 }
 
@@ -420,7 +437,7 @@ function renderStickers(m){ const unlocked=prog.unlocked||[]; const total=STAR_S
   function cell(s,ok,hint){ return '<button class="scell" data-id="'+s.id+'" style="cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px;border-radius:16px;border:4px solid '+(ok?"#FBBF24":"#E2E8F0")+';background:'+(ok?"#fff":"#F8FAFC")+';aspect-ratio:1">'+
     '<span style="font-size:44px;filter:'+(ok?"none":"grayscale(1)")+';opacity:'+(ok?1:.35)+'">'+s.emoji+'</span>'+
     '<span class="fred" style="font-weight:700;font-size:13px;text-align:center;color:'+(ok?"#334155":"#94A3B8")+'">'+s.name+'</span>'+
-    (ok?"":'<span style="font-size:11px;font-weight:700;color:#94A3B8">🔒 '+hint+'</span>')+'</button>'; }
+    '<span style="font-size:11px;font-weight:700;color:'+(ok?"#D97706":"#94A3B8")+'">'+(ok?'':'🔒 ')+hint+'</span></button>'; }
   m.innerHTML='<div class="fade" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:24px">'+
     '<div style="text-align:center"><h2 class="fred" style="font-weight:700;font-size:36px;color:#F59E0B;margin:0">Tarrat 🏅</h2><p style="color:#64748B;font-weight:700;font-size:18px;margin:4px 0">Kerätty '+unlocked.length+' / '+total+' · sinulla on '+prog.stars+' tähteä ⭐</p></div>'+
     '<div style="width:100%;max-width:760px"><h3 class="fred" style="font-weight:700;font-size:20px;color:#64748B;margin:0 0 12px">Ansaitse tähdillä ⭐</h3><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px">'+STAR_STICKERS.map(s=>cell(s,unlocked.includes(s.id),s.cost+" ⭐")).join("")+'</div></div>'+
@@ -455,11 +472,10 @@ function showCelebration(){ if(!celebrateQueue.length||document.getElementById("
 function openSettings(){ const ov=document.createElement("div"); ov.className="overlay";
   ov.innerHTML='<div style="background:#fff;border:4px solid #7DD3FC;border-radius:24px;padding:28px;max-width:420px;width:100%" class="pop">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px"><h2 class="fred" style="font-weight:700;font-size:24px;margin:0;color:#334155">Ääniasetukset ⚙️</h2><button id="setx" class="btn" style="padding:8px;border-color:#CBD5E1">✕</button></div>'+
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:18px;border:2px solid #BAE6FD;background:#F0F9FF;border-radius:16px;padding:12px"><span style="font-size:26px">🎙️</span><p class="fred" style="font-weight:700;color:#64748B;font-size:14px;margin:0">Sanat luetaan laadukkaalla äänellä.</p></div>'+
     '<p class="fred" style="font-weight:700;color:#64748B;margin:0 0 8px">Aksentti</p>'+
-    '<div style="display:flex;gap:8px;margin-bottom:18px">'+
-      '<button id="acc-gb" class="btn fred" style="flex:1;padding:10px;font-size:16px;border-color:'+(voice.accent==='en-GB'?'#0284C7':'#CBD5E1')+';background:'+(voice.accent==='en-GB'?'#E0F2FE':'#fff')+'">🇬🇧 Britti</button>'+
-      '<button id="acc-us" class="btn fred" style="flex:1;padding:10px;font-size:16px;border-color:'+(voice.accent==='en-US'?'#0284C7':'#CBD5E1')+';background:'+(voice.accent==='en-US'?'#E0F2FE':'#fff')+'">🇺🇸 Jenkki</button>'+
+    '<div style="display:flex;gap:12px;margin-bottom:18px">'+
+      '<button id="acc-gb" class="btn fred" style="flex:1;padding:12px;font-size:32px;border-color:'+(voice.accent==='en-GB'?'#0284C7':'#CBD5E1')+';background:'+(voice.accent==='en-GB'?'#E0F2FE':'#fff')+'">🇬🇧</button>'+
+      '<button id="acc-us" class="btn fred" style="flex:1;padding:12px;font-size:32px;border-color:'+(voice.accent==='en-US'?'#0284C7':'#CBD5E1')+';background:'+(voice.accent==='en-US'?'#E0F2FE':'#fff')+'">🇺🇸</button>'+
     '</div>'+
     '<p class="fred" style="font-weight:700;color:#64748B;margin:0 0 8px">Puheen nopeus</p>'+
     '<div style="display:flex;align-items:center;gap:12px"><span style="font-size:26px">🐢</span><input id="rate" type="range" min="0.5" max="1.3" step="0.05" value="'+voice.rate+'" style="flex:1"><span style="font-size:26px">🐇</span></div>'+
