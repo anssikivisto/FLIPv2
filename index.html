@@ -81,10 +81,10 @@ const TOPICS=[
   {id:"school",title:"Koulu",en:"School",emoji:"🏫",kind:"emoji",theme:{bg:"#FEF08A",border:"#EAB308",accent:"#CA8A04"},items:mk(WORDS.school)},
 ];
 const TASKS=[
-  {id:"opettele",fi:"Opettele",emoji:"📚",desc:"Kertaa sanat",border:"#D97706"},
+  {id:"opettele",fi:"Opettele",emoji:"📚",desc:"Kertaa sanat – ei tähtiä",border:"#D97706"},
   {id:"recognize",fi:"Tunnista",emoji:"🎧",desc:"Kuuntele ja napauta",border:"#0284C7"},
   {id:"match",fi:"Yhdistä",emoji:"🧩",desc:"Yhdistä sana ja kuva",border:"#7E22CE"},
-  {id:"speak",fi:"Puhu",emoji:"🎙️",desc:"Harjoittele ääntämistä",border:"#BE123C"},
+  {id:"speak",fi:"Puhu",emoji:"🎙️",desc:"Sano ja kuuntele itseäsi",border:"#BE123C"},
   {id:"write",fi:"Kirjoita sana",emoji:"✍️",desc:"Kirjoita kirjaimet",border:"#15803D"},
 ];
 const TASK_LABEL={opettele:"Opettele",recognize:"Tunnista",match:"Yhdistä",speak:"Puhu",write:"Kirjoita sana"};
@@ -171,7 +171,7 @@ async function playRecordedAudio(blobUrl) {
     const source = c.createBufferSource();
     source.buffer = audioBuffer;
     const gain = c.createGain();
-    gain.gain.value = 2.8; // Vahvistetaan volyymia 280 %
+    gain.gain.value = 2.8;
     source.connect(gain);
     gain.connect(c.destination);
     source.start(0);
@@ -286,7 +286,7 @@ function renderGame(m){ const pool=getPool(S.topic,S.level); ({opettele:tOpettel
 /* ---- OPETTELE (flashcards, no stars) ---- */
 function tOpettele(m,pool){ let idx=0;
   m.innerHTML='<div class="fade" style="display:flex;flex-direction:column;align-items:center;gap:18px;width:100%">'+
-    mascot("Kertaa sanoja rauhassa!",true)+
+    mascot("Kertaa sanat rauhassa – ei tähtiä!",true)+
     '<p id="opt-count" class="fred" style="color:#94A3B8;font-weight:700"></p>'+
     '<div style="background:#fff;border:4px solid '+S.topic.theme.border+';border-radius:24px;padding:36px;display:flex;flex-direction:column;align-items:center;gap:10px;max-width:360px;width:100%">'+
       '<div id="opt-img" style="min-height:96px;display:flex;align-items:center;justify-content:center"></div>'+
@@ -330,18 +330,33 @@ function tRecognize(m,pool){ const qs=shuffle(pool).slice(0,Math.min(10,pool.len
     const lbtn = document.getElementById("listen");
     lbtn.onclick=()=>{ lbtn.classList.add("wiggle"); setTimeout(()=>lbtn.classList.remove("wiggle"),400); speak(q.t.en); };
     m.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{ if(done)return; const o=q.opts[+b.dataset.i];
-      if(o.en===q.t.en){ done=true; b.style.background="#DCFCE7"; b.style.borderColor="#15803D"; b.classList.add("pop"); playCorrect(); playStar(); onStar(); showRecOverlay(q.t); }
+      if(o.en===q.t.en){ 
+        done=true; 
+        b.style.background="#DCFCE7"; 
+        b.style.borderColor="#15803D"; 
+        b.classList.add("pop"); 
+        playCorrect(); playStar(); onStar(); 
+        setTimeout(() => showRecOverlay(q.t), 600); 
+      }
       else { b.classList.add("shake"); playTry(); setTimeout(()=>b.classList.remove("shake"),450); } });
     setTimeout(()=>speak(q.t.en),350);
   }
-  function showRecOverlay(t){ const ov=document.createElement("div"); ov.className="overlay";
+  function showRecOverlay(t){ 
+    const ov=document.createElement("div"); ov.className="overlay";
     ov.innerHTML='<div class="pop" style="background:#fff;border:4px solid #4ADE80;border-radius:24px;padding:36px 48px;display:flex;flex-direction:column;align-items:center;gap:16px">'+
       imgHTML(t,S.topic.kind,"120px")+'<span class="fred" style="font-weight:700;font-size:52px;color:#16A34A">'+esc(t.en)+'</span>'+
-      '<span class="fred" style="font-weight:700;font-size:22px;color:#F59E0B">Hienoa! ⭐</span>'+nextArrow("ovnext",idx+1>=qs.length?"Valmis":"Seuraava")+'</div>';
-    function adv(){ ov.remove(); if(idx+1>=qs.length)finishRound(); else {idx++;draw();} }
-    ov.onclick=adv; ov.querySelector("#ovnext").onclick=(e)=>{e.stopPropagation();adv();};
+      '<span class="fred" style="font-weight:700;font-size:22px;color:#F59E0B">Hienoa! ⭐</span></div>';
+    
+    let timer = null;
+    function adv(){ 
+      if(timer) clearTimeout(timer);
+      ov.remove(); 
+      if(idx+1>=qs.length) finishRound(); else {idx++;draw();} 
+    }
+    ov.onclick=adv;
     document.body.appendChild(ov);
-    setTimeout(()=>speak(t.en),550);
+    speak(t.en);
+    timer = setTimeout(adv, 2000);
   } draw();
 }
 
