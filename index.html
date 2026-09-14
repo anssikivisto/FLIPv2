@@ -81,10 +81,10 @@ const TOPICS=[
   {id:"school",title:"Koulu",en:"School",emoji:"🏫",kind:"emoji",theme:{bg:"#FEF08A",border:"#EAB308",accent:"#CA8A04"},items:mk(WORDS.school)},
 ];
 const TASKS=[
-  {id:"opettele",fi:"Opettele",emoji:"📚",desc:"Kertaa sanat – ei tähtiä",border:"#D97706"},
+  {id:"opettele",fi:"Opettele",emoji:"📚",desc:"Kertaa sanat",border:"#D97706"},
   {id:"recognize",fi:"Tunnista",emoji:"🎧",desc:"Kuuntele ja napauta",border:"#0284C7"},
   {id:"match",fi:"Yhdistä",emoji:"🧩",desc:"Yhdistä sana ja kuva",border:"#7E22CE"},
-  {id:"speak",fi:"Puhu",emoji:"🎙️",desc:"Sano ja kuuntele itseäsi",border:"#BE123C"},
+  {id:"speak",fi:"Puhu",emoji:"🎙️",desc:"Harjoittele ääntämistä",border:"#BE123C"},
   {id:"write",fi:"Kirjoita sana",emoji:"✍️",desc:"Kirjoita kirjaimet",border:"#15803D"},
 ];
 const TASK_LABEL={opettele:"Opettele",recognize:"Tunnista",match:"Yhdistä",speak:"Puhu",write:"Kirjoita sana"};
@@ -286,7 +286,7 @@ function renderGame(m){ const pool=getPool(S.topic,S.level); ({opettele:tOpettel
 /* ---- OPETTELE (flashcards, no stars) ---- */
 function tOpettele(m,pool){ let idx=0;
   m.innerHTML='<div class="fade" style="display:flex;flex-direction:column;align-items:center;gap:18px;width:100%">'+
-    mascot("Kertaa sanat rauhassa – ei tähtiä!",true)+
+    mascot("Kertaa sanoja rauhassa!",true)+
     '<p id="opt-count" class="fred" style="color:#94A3B8;font-weight:700"></p>'+
     '<div style="background:#fff;border:4px solid '+S.topic.theme.border+';border-radius:24px;padding:36px;display:flex;flex-direction:column;align-items:center;gap:10px;max-width:360px;width:100%">'+
       '<div id="opt-img" style="min-height:96px;display:flex;align-items:center;justify-content:center"></div>'+
